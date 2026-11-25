@@ -142,7 +142,7 @@ class ShareItApiTests {
                 .andExpect(jsonPath("$.name").value("Drill"))
                 .andExpect(jsonPath("$.description").value("Power tool"))
                 .andExpect(jsonPath("$.available").value(false))
-                .andExpect(jsonPath("$.requestId").isEmpty());
+                .andExpect(jsonPath("$.requestId").doesNotHaveJsonPath());
         mvc.perform(patch("/items/{id}", itemId).header(USER_ID_HEADER, ownerId)
                         .contentType(APPLICATION_JSON).content("{\"name\":\"Changed\",\"description\":\"   \"}"))
                 .andExpect(status().isBadRequest());
@@ -197,12 +197,36 @@ class ShareItApiTests {
         assertThat(createItem(otherId, "Spare", "Replacement", false)).isGreaterThan(otherItemId);
     }
 
+    @Test
+    void concurrentItemCreationAndOwnerDeletionLeaveNoOrphanedItems() throws Exception {
+        long ownerId = createUser("Owner", "owner@example.com");
+        CyclicBarrier start = new CyclicBarrier(2);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var creation = executor.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return mvc.perform(post("/items").header(USER_ID_HEADER, ownerId).contentType(APPLICATION_JSON)
+                                .content("{\"name\":\"Camera\",\"description\":\"Digital camera\",\"available\":true}"))
+                        .andReturn().getResponse().getStatus();
+            });
+            var deletion = executor.submit(() -> {
+                start.await(5, TimeUnit.SECONDS);
+                return mvc.perform(delete("/users/{id}", ownerId)).andReturn().getResponse().getStatus();
+            });
+
+            assertThat(deletion.get(10, TimeUnit.SECONDS)).isEqualTo(200);
+            assertThat(creation.get(10, TimeUnit.SECONDS)).isIn(200, 404);
+        }
+
+        mvc.perform(get("/items/search").param("text", "camera"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"{}", "{\"name\":\" \",\"description\":\"Description\",\"available\":true}",
             "{\"name\":\"Tool\",\"description\":\"\",\"available\":true}",
             "{\"name\":\"Tool\",\"description\":\"\u2003\",\"available\":true}",
-            "{\"name\":\"Tool\",\"description\":\"Description\"}",
-            "{\"name\":\"Tool\",\"description\":\"Description\",\"available\":true,\"requestId\":1}"})
+            "{\"name\":\"Tool\",\"description\":\"Description\"}"})
     void rejectsInvalidItemCreation(String body) throws Exception {
         long ownerId = createUser("Owner", "owner@example.com");
 

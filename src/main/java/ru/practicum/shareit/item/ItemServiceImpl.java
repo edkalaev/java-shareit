@@ -8,6 +8,7 @@ import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.exception.ValidationException;
 import ru.practicum.shareit.item.dto.ItemDto;
 import ru.practicum.shareit.item.model.Item;
+import ru.practicum.shareit.storage.InMemoryOperationLock;
 import ru.practicum.shareit.user.User;
 import ru.practicum.shareit.user.UserStorage;
 import ru.practicum.shareit.validation.OnUpdate;
@@ -22,21 +23,21 @@ public class ItemServiceImpl implements ItemService {
     private final UserStorage userStorage;
     private final ItemStorage itemStorage;
     private final Validator validator;
+    private final InMemoryOperationLock operationLock;
 
     @Override
     public ItemDto create(long ownerId, ItemDto dto) {
-        synchronized (userStorage) {
+        synchronized (operationLock) {
             User owner = findOwner(ownerId);
             validate(dto);
-            Item item = ItemMapper.toModel(dto);
-            item.setOwner(owner);
+            Item item = ItemMapper.toModel(dto, owner);
             return ItemMapper.toDto(itemStorage.create(item));
         }
     }
 
     @Override
     public ItemDto update(long ownerId, long itemId, ItemDto dto) {
-        synchronized (userStorage) {
+        synchronized (operationLock) {
             Item current = findItem(itemId);
             if (current.getOwner().getId() != ownerId) {
                 throw new NotFoundException("Item not found");
@@ -48,8 +49,7 @@ public class ItemServiceImpl implements ItemService {
                     Objects.requireNonNullElse(dto.getName(), current.getName()),
                     Objects.requireNonNullElse(dto.getDescription(), current.getDescription()),
                     Objects.requireNonNullElse(dto.getAvailable(), current.getAvailable()),
-                    current.getOwner(),
-                    current.getRequest()
+                    current.getOwner()
             );
             return ItemMapper.toDto(itemStorage.update(updated));
         }
@@ -57,12 +57,14 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public ItemDto getById(long itemId) {
-        return ItemMapper.toDto(findItem(itemId));
+        synchronized (operationLock) {
+            return ItemMapper.toDto(findItem(itemId));
+        }
     }
 
     @Override
     public List<ItemDto> getAllByOwner(long ownerId) {
-        synchronized (userStorage) {
+        synchronized (operationLock) {
             findOwner(ownerId);
             return itemStorage.findAllByOwner(ownerId).stream()
                     .map(ItemMapper::toDto)
@@ -76,9 +78,11 @@ public class ItemServiceImpl implements ItemService {
             return List.of();
         }
 
-        return itemStorage.searchAvailable(text).stream()
-                .map(ItemMapper::toDto)
-                .toList();
+        synchronized (operationLock) {
+            return itemStorage.searchAvailable(text).stream()
+                    .map(ItemMapper::toDto)
+                    .toList();
+        }
     }
 
     private User findOwner(long ownerId) {

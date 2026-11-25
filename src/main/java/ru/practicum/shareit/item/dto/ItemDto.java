@@ -2,7 +2,6 @@ package ru.practicum.shareit.item.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Null;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.groups.Default;
 import lombok.AllArgsConstructor;
@@ -28,7 +27,4 @@ public class ItemDto {
 
     @NotNull
     private Boolean available;
-
-    @Null(message = "is not supported yet")
-    private Long requestId;
 }
