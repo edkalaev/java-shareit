@@ -1,76 +1,67 @@
 package ru.practicum.shareit.user;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.shareit.exception.ConflictException;
 import ru.practicum.shareit.exception.NotFoundException;
-import ru.practicum.shareit.item.ItemStorage;
-import ru.practicum.shareit.storage.InMemoryOperationLock;
 
 import java.util.List;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class UserServiceImpl implements UserService {
-    private final UserStorage userStorage;
-    private final ItemStorage itemStorage;
-    private final InMemoryOperationLock operationLock;
+    private final UserRepository userRepository;
 
     @Override
+    @Transactional
     public UserDto create(UserDto dto) {
-        synchronized (operationLock) {
-            checkEmailAvailable(dto.getEmail(), null);
-            return UserMapper.toDto(userStorage.create(UserMapper.toModel(dto)));
-        }
+        User user = UserMapper.toModel(dto);
+        user.setId(null);
+        checkEmailAvailable(user.getEmail(), null);
+        return UserMapper.toDto(userRepository.save(user));
     }
 
     @Override
+    @Transactional
     public UserDto update(long userId, UserDto dto) {
-        synchronized (operationLock) {
-            User current = findUser(userId);
-            String name = Objects.requireNonNullElse(dto.getName(), current.getName());
-            String email = Objects.requireNonNullElse(dto.getEmail(), current.getEmail());
-
-            if (dto.getEmail() != null) {
-                checkEmailAvailable(email, userId);
-            }
-            return UserMapper.toDto(userStorage.update(userId, name, email));
+        User user = findUserForUpdate(userId);
+        if (dto.getEmail() != null) {
+            checkEmailAvailable(dto.getEmail(), userId);
+            user.setEmail(dto.getEmail());
         }
+        if (dto.getName() != null) {
+            user.setName(dto.getName());
+        }
+        return UserMapper.toDto(user);
     }
 
     @Override
     public UserDto getById(long userId) {
-        synchronized (operationLock) {
-            return UserMapper.toDto(findUser(userId));
-        }
+        return userRepository.findById(userId).map(UserMapper::toDto)
+                .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     @Override
     public List<UserDto> getAll() {
-        synchronized (operationLock) {
-            return userStorage.findAll().stream()
-                    .map(UserMapper::toDto)
-                    .toList();
-        }
+        return userRepository.findAll(Sort.by("id")).stream().map(UserMapper::toDto).toList();
     }
 
     @Override
+    @Transactional
     public void delete(long userId) {
-        synchronized (operationLock) {
-            findUser(userId);
-            itemStorage.deleteAllByOwner(userId);
-            userStorage.delete(userId);
-        }
+        userRepository.delete(findUserForUpdate(userId));
     }
 
-    private User findUser(long userId) {
-        return userStorage.findById(userId)
+    private User findUserForUpdate(long userId) {
+        return userRepository.findForUpdate(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
     }
 
     private void checkEmailAvailable(String email, Long userId) {
-        if (userStorage.findByEmail(email).filter(user -> !user.getId().equals(userId)).isPresent()) {
+        if (userRepository.findByEmailIgnoreCase(email).filter(user -> !user.getId().equals(userId)).isPresent()) {
             throw new ConflictException("Email is already in use");
         }
     }

@@ -107,6 +107,19 @@ class ShareItApiTests {
     }
 
     @Test
+    void preservesEmailCasingButRejectsCaseInsensitiveDuplicates() throws Exception {
+        long userId = createUser("First", "First@Example.com");
+        mvc.perform(get("/users/{id}", userId)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("First@Example.com"));
+        mvc.perform(patch("/users/{id}", userId).contentType(APPLICATION_JSON)
+                        .content("{\"email\":\"FIRST@example.com\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("FIRST@example.com"));
+        mvc.perform(post("/users").contentType(APPLICATION_JSON)
+                        .content("{\"name\":\"Duplicate\",\"email\":\"first@example.com\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     void acceptsOnlyOneConcurrentRegistrationWithSameEmail() throws Exception {
         CyclicBarrier start = new CyclicBarrier(2);
         Callable<Integer> register = () -> {
