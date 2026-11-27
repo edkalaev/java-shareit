@@ -132,7 +132,9 @@ class BookingAndCommentApiTests {
         submitBooking(-1, drill.getId(), start, end).andExpect(status().isNotFound());
         submitBooking(renter.getId(), 999999L, start, end).andExpect(status().isNotFound());
         submitBooking(renter.getId(), unavailable.getId(), start, end).andExpect(status().isBadRequest());
-        submitBooking(owner.getId(), drill.getId(), start, end).andExpect(status().isNotFound());
+        submitBooking(owner.getId(), drill.getId(), start, end)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Owner cannot book their own item"));
         submitBooking(renter.getId(), null, start, end).andExpect(status().isBadRequest());
     }
 
@@ -150,7 +152,9 @@ class BookingAndCommentApiTests {
         Booking overlap = booking(drill, other, 2, 4, BookingStatus.WAITING);
         Booking adjacent = booking(drill, other, 3, 5, BookingStatus.WAITING);
 
-        approval(renter.getId(), first.getId(), true).andExpect(status().isForbidden());
+        approval(renter.getId(), first.getId(), true)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("Only the item owner can change booking status"));
         approval(other.getId(), first.getId(), true).andExpect(status().isForbidden());
         approval(-1, first.getId(), true).andExpect(status().isForbidden());
         approval(owner.getId(), -1, true).andExpect(status().isNotFound());
@@ -262,7 +266,10 @@ class BookingAndCommentApiTests {
                 .andExpect(jsonPath("$[0].nextBooking.id").value(next.getId()))
                 .andExpect(jsonPath("$[0].nextBooking.bookerId").value(renter.getId()))
                 .andExpect(jsonPath("$[1].id").value(withoutBookings.getId()))
-                .andExpect(jsonPath("$[1].lastBooking").isEmpty()).andExpect(jsonPath("$[1].nextBooking").isEmpty())
+                .andExpect(jsonPath("$[1].lastBooking").hasJsonPath())
+                .andExpect(jsonPath("$[1].lastBooking").isEmpty())
+                .andExpect(jsonPath("$[1].nextBooking").hasJsonPath())
+                .andExpect(jsonPath("$[1].nextBooking").isEmpty())
                 .andExpect(jsonPath("$[2].lastBooking.id").value(past.getId()))
                 .andExpect(jsonPath("$[2].nextBooking").isEmpty())
                 .andExpect(jsonPath("$[3].lastBooking").isEmpty())
@@ -271,10 +278,13 @@ class BookingAndCommentApiTests {
         mvc.perform(get("/items/{id}", drill.getId()).header(USER_HEADER, owner.getId()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lastBooking.id").value(current.getId()));
         mvc.perform(get("/items/{id}", drill.getId()).header(USER_HEADER, renter.getId()))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.lastBooking").isEmpty())
-                .andExpect(jsonPath("$.nextBooking").isEmpty());
-        mvc.perform(get("/items/{id}", drill.getId())).andExpect(status().isOk())
-                .andExpect(jsonPath("$.lastBooking").isEmpty());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastBooking").doesNotHaveJsonPath())
+                .andExpect(jsonPath("$.nextBooking").doesNotHaveJsonPath());
+        mvc.perform(get("/items/{id}", drill.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastBooking").doesNotHaveJsonPath())
+                .andExpect(jsonPath("$.nextBooking").doesNotHaveJsonPath());
     }
 
     @Test

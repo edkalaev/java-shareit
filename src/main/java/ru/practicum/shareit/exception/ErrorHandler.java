@@ -34,6 +34,11 @@ public class ErrorHandler extends ResponseEntityExceptionHandler {
         return respond(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<Object> handleForbidden(ForbiddenException exception) {
+        return respond(HttpStatus.FORBIDDEN, exception.getMessage());
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<Object> handleConflict(ConflictException exception) {
         return respond(HttpStatus.CONFLICT, exception.getMessage());

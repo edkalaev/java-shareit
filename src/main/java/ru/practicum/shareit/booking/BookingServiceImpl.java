@@ -1,13 +1,12 @@
 package ru.practicum.shareit.booking;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 import ru.practicum.shareit.booking.dto.BookingDto;
 import ru.practicum.shareit.booking.dto.BookingRequestDto;
+import ru.practicum.shareit.exception.ForbiddenException;
 import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.exception.ValidationException;
 import ru.practicum.shareit.item.ItemRepository;
@@ -36,7 +35,7 @@ public class BookingServiceImpl implements BookingService {
         Item item = itemRepository.findForUpdate(dto.itemId())
                 .orElseThrow(() -> new NotFoundException("Item not found"));
         if (item.getOwner().getId() == bookerId) {
-            throw new NotFoundException("Owner cannot book their own item");
+            throw new ValidationException("Owner cannot book their own item");
         }
         if (!item.getAvailable()) {
             throw new ValidationException("Item is unavailable");
@@ -119,7 +118,7 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new NotFoundException("Booking not found"));
     }
 
-    private ResponseStatusException approvalForbidden() {
-        return new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the item owner can change booking status");
+    private ForbiddenException approvalForbidden() {
+        return new ForbiddenException("Only the item owner can change booking status");
     }
 }

@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import ru.practicum.shareit.item.dto.CommentDto;
 import ru.practicum.shareit.item.dto.CommentRequestDto;
+import ru.practicum.shareit.item.dto.ItemDetailsDto;
 import ru.practicum.shareit.item.dto.ItemDto;
 import ru.practicum.shareit.item.dto.ItemWithBookingsDto;
 
@@ -38,8 +39,8 @@ public class ItemController {
     }
 
     @GetMapping("/{itemId}")
-    public ItemWithBookingsDto getById(@PathVariable long itemId,
-                                       @RequestHeader(name = USER_ID_HEADER, required = false) Long viewerId) {
+    public ItemDetailsDto getById(@PathVariable long itemId,
+                                  @RequestHeader(name = USER_ID_HEADER, required = false) Long viewerId) {
         return itemService.getById(itemId, viewerId);
     }
 
