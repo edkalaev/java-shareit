@@ -14,7 +14,6 @@ import ru.practicum.shareit.exception.NotFoundException;
 import ru.practicum.shareit.exception.ValidationException;
 import ru.practicum.shareit.item.dto.CommentDto;
 import ru.practicum.shareit.item.dto.CommentRequestDto;
-import ru.practicum.shareit.item.dto.ItemDetailsDto;
 import ru.practicum.shareit.item.dto.ItemDto;
 import ru.practicum.shareit.item.dto.ItemWithBookingsDto;
 import ru.practicum.shareit.item.model.Comment;
@@ -71,13 +70,9 @@ public class ItemServiceImpl implements ItemService {
     }
 
     @Override
-    public ItemDetailsDto getById(long itemId, Long viewerId) {
+    public ItemWithBookingsDto getById(long itemId, Long viewerId) {
         Item item = findItem(itemId);
-        if (item.getOwner().getId().equals(viewerId)) {
-            return toDetailsWithBookings(List.of(item)).getFirst();
-        }
-        List<CommentDto> comments = findComments(List.of(itemId)).getOrDefault(itemId, List.of());
-        return ItemMapper.toDetails(item, comments);
+        return toDetails(List.of(item), item.getOwner().getId().equals(viewerId)).getFirst();
     }
 
     @Override
@@ -85,7 +80,7 @@ public class ItemServiceImpl implements ItemService {
         if (!userRepository.existsById(ownerId)) {
             throw new NotFoundException("User not found");
         }
-        return toDetailsWithBookings(itemRepository.findAllByOwnerIdOrderById(ownerId));
+        return toDetails(itemRepository.findAllByOwnerIdOrderById(ownerId), true);
     }
 
     @Override
@@ -113,38 +108,35 @@ public class ItemServiceImpl implements ItemService {
                 .toList();
     }
 
-    private List<ItemWithBookingsDto> toDetailsWithBookings(List<Item> items) {
+    private List<ItemWithBookingsDto> toDetails(List<Item> items, boolean includeBookings) {
         if (items.isEmpty()) {
             return List.of();
         }
 
         List<Long> itemIds = items.stream().map(Item::getId).toList();
-        Map<Long, List<CommentDto>> comments = findComments(itemIds);
+        Map<Long, List<CommentDto>> comments = new HashMap<>();
+        for (Comment comment : commentRepository.findAllByItemIdInOrderByCreatedAscIdAsc(itemIds)) {
+            comments.computeIfAbsent(comment.getItem().getId(), id -> new ArrayList<>())
+                    .add(CommentMapper.toDto(comment));
+        }
 
         Map<Long, BookingShortDto> last = new HashMap<>();
         Map<Long, BookingShortDto> next = new HashMap<>();
-        LocalDateTime now = LocalDateTime.now(clock);
-        for (Booking booking : bookingRepository.findNearestApprovedBookings(itemIds, now)) {
-            Long itemId = booking.getItem().getId();
-            if (booking.getStart().isAfter(now)) {
-                next.put(itemId, BookingMapper.toShortDto(booking));
-            } else {
-                last.put(itemId, BookingMapper.toShortDto(booking));
+        if (includeBookings) {
+            LocalDateTime now = LocalDateTime.now(clock);
+            for (Booking booking : bookingRepository.findNearestApprovedBookings(itemIds, now)) {
+                Long itemId = booking.getItem().getId();
+                if (booking.getStart().isAfter(now)) {
+                    next.put(itemId, BookingMapper.toShortDto(booking));
+                } else {
+                    last.put(itemId, BookingMapper.toShortDto(booking));
+                }
             }
         }
         return items.stream()
                 .map(item -> ItemMapper.toDetails(item, last.get(item.getId()), next.get(item.getId()),
                         comments.getOrDefault(item.getId(), List.of())))
                 .toList();
-    }
-
-    private Map<Long, List<CommentDto>> findComments(List<Long> itemIds) {
-        Map<Long, List<CommentDto>> comments = new HashMap<>();
-        for (Comment comment : commentRepository.findAllByItemIdInOrderByCreatedAscIdAsc(itemIds)) {
-            comments.computeIfAbsent(comment.getItem().getId(), id -> new ArrayList<>())
-                    .add(CommentMapper.toDto(comment));
-        }
-        return comments;
     }
 
     private Item findItem(long itemId) {

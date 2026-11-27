@@ -44,6 +44,7 @@ import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -279,12 +280,12 @@ class BookingAndCommentApiTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lastBooking.id").value(current.getId()));
         mvc.perform(get("/items/{id}", drill.getId()).header(USER_HEADER, renter.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.lastBooking").doesNotHaveJsonPath())
-                .andExpect(jsonPath("$.nextBooking").doesNotHaveJsonPath());
+                .andExpect(jsonPath("$.lastBooking").value(nullValue()))
+                .andExpect(jsonPath("$.nextBooking").value(nullValue()));
         mvc.perform(get("/items/{id}", drill.getId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.lastBooking").doesNotHaveJsonPath())
-                .andExpect(jsonPath("$.nextBooking").doesNotHaveJsonPath());
+                .andExpect(jsonPath("$.lastBooking").value(nullValue()))
+                .andExpect(jsonPath("$.nextBooking").value(nullValue()));
     }
 
     @Test
@@ -298,8 +299,11 @@ class BookingAndCommentApiTests {
                 .andExpect(jsonPath("$.created").value(NOW.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)));
         submitComment(renter.getId(), drill.getId(), "{\"text\":\"Second review\"}").andExpect(status().isOk());
 
-        mvc.perform(get("/items/{id}", drill.getId()).header(USER_HEADER, other.getId()))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.comments[0].text").value("Works well"))
+        mvc.perform(get("/items/{id}", drill.getId()).header(USER_HEADER, renter.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastBooking").value(nullValue()))
+                .andExpect(jsonPath("$.nextBooking").value(nullValue()))
+                .andExpect(jsonPath("$.comments[0].text").value("Works well"))
                 .andExpect(jsonPath("$.comments[1].text").value("Second review"));
         mvc.perform(get("/items").header(USER_HEADER, owner.getId())).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].comments.length()").value(2))

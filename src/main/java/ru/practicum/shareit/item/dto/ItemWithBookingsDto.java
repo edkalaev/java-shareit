@@ -5,6 +5,5 @@ import ru.practicum.shareit.booking.dto.BookingShortDto;
 import java.util.List;
 
 public record ItemWithBookingsDto(Long id, String name, String description, Boolean available,
-                                  BookingShortDto lastBooking, BookingShortDto nextBooking,
-                                  List<CommentDto> comments) implements ItemDetailsDto {
+                                  BookingShortDto lastBooking, BookingShortDto nextBooking, List<CommentDto> comments) {
 }
